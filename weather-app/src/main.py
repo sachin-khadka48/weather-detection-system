@@ -21,7 +21,7 @@ def display_weather_info(weather_data):
         print("Could not retrieve weather data. Please check the city name.\n")
 
 def main():
-    api_key = 'ecd53c9e8423f9e8b0cded3d83852b72'  # <-- Replace this!
+    api_key = 'ecd53c9e8423f9e8b0cded3d83852b72'  
     weather_api = WeatherAPI(api_key)
     while True:
         city = input("Enter city name (or type 'exit' to quit): ")

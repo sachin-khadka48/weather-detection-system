@@ -1,0 +1,30 @@
+<!-- filepath: c:\Users\nitro\OneDrive\Desktop\weather detection\weather-app\src\templates\index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Weather App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Weather App</h1>
+        <form method="post">
+            <input type="text" name="city" placeholder="Enter city name" required>
+            <button type="submit">Get Weather</button>
+        </form>
+        {% if error %}
+            <div class="error">{{ error }}</div>
+        {% endif %}
+        {% if weather %}
+            <div class="weather">
+                <h2>Weather in {{ weather.city }}</h2>
+                <p>Temperature: {{ weather.temperature }}°C</p>
+                <p>Humidity: {{ weather.humidity }}%</p>
+                <p>Condition: {{ weather.condition }}</p>
+                <p>Wind Speed: {{ weather.wind }} m/s</p>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
