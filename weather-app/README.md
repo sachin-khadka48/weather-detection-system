@@ -1,52 +1,77 @@
-# Weather App (API-Based)
+# Weather App (All-In-One Web Dashboard)
 
-This Weather App is a Python project that fetches real-time weather data from an API and displays it to the user in a simple format. The application allows users to search for weather information by city name and provides details such as temperature, humidity, and weather conditions.
+This project is now a full weather command dashboard with automatic location loading, exact local time, forecast analytics, air quality, and interactive map tools.
 
 ## Features
 
-- 🌍 Search weather by city name
-- 🌡️ Show temperature (°C)
-- 💧 Show humidity
-- ☁️ Show weather condition (Clear, Rain, Cloudy)
-- 🌬️ Show wind speed
-- ❌ Handle invalid city names with error messages
+- Automatic weather loading for your current location (with browser permission)
+- City-based weather search and quick city shortcuts
+- Exact live local time and date for the selected location
+- Sunrise, sunset, and daylight duration details
+- Next 24-hour forecast (3-hour intervals)
+- Air quality (AQI, PM2.5, PM10, NO2, O3, CO)
+- Interactive OpenStreetMap map with city marker
+- Recent searches and favorite city shortcuts
+- Celsius and Fahrenheit toggle
+- Smart weather tips based on conditions
+- One-click actions: refresh, copy summary, save favorite
+- Responsive modern UI for desktop and mobile
+- Graceful error handling for invalid city/network/API issues
 
-## Technologies Used
+## Tech Stack
 
 - Python
-- requests library (for API calls)
-- JSON parsing
+- Flask
+- requests
+- HTML, CSS, JavaScript
+- OpenWeather Current Weather API
+- OpenWeather Forecast API
+- OpenWeather Air Pollution API
+- OpenStreetMap + Leaflet
 
-## Setup Instructions
+## Quick Start
 
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/weather-app.git
-   ```
+1. Move into the app directory:
 
-2. Navigate to the project directory:
-   ```
-   cd weather-app
-   ```
-
-3. Install the required dependencies:
-   ```
-   pip install -r requirements.txt
-   ```
-
-## Usage
-
-To run the application, execute the following command:
-```
-python src/main.py
+```bash
+cd weather-app
 ```
 
-Follow the prompts to enter a city name and retrieve the current weather information.
+2. Install dependencies:
 
-## Contributing
+```bash
+pip install -r requirements.txt
+```
 
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any suggestions or improvements.
+3. Set your OpenWeather API key:
 
-## License
+PowerShell:
 
-This project is licensed under the MIT License. See the LICENSE file for more details.
+```powershell
+$env:OPENWEATHER_API_KEY="YOUR_API_KEY"
+```
+
+4. Start the web app:
+
+```bash
+python src/web_app.py
+```
+
+5. Open in your browser:
+
+```text
+http://127.0.0.1:5000
+```
+
+## Alternate Entrypoint
+
+You can also run:
+
+```bash
+python src/ui/app_ui.py
+```
+
+## Notes
+
+- If no API key is provided, the app shows a setup error message.
+- You can customize host/port with `FLASK_HOST`, `PORT`, and `FLASK_DEBUG` environment variables.

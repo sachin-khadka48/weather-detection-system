@@ -1,30 +1,675 @@
-<!-- filepath: c:\Users\nitro\OneDrive\Desktop\weather detection\weather-app\src\templates\index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Weather App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nimbus Weather Command</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Syne:wght@600;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-    <div class="container">
-        <h1>Weather App</h1>
-        <form method="post">
-            <input type="text" name="city" placeholder="Enter city name" required>
-            <button type="submit">Get Weather</button>
-        </form>
-        {% if error %}
-            <div class="error">{{ error }}</div>
-        {% endif %}
-        {% if weather %}
-            <div class="weather">
-                <h2>Weather in {{ weather.city }}</h2>
-                <p>Temperature: {{ weather.temperature }}°C</p>
-                <p>Humidity: {{ weather.humidity }}%</p>
-                <p>Condition: {{ weather.condition }}</p>
-                <p>Wind Speed: {{ weather.wind }} m/s</p>
-            </div>
-        {% endif %}
-    </div>
+<body
+    class="{% if weather and weather.is_daytime is not none %}{{ 'theme-day' if weather.is_daytime else 'theme-night' }}{% else %}theme-default{% endif %}"
+    data-has-weather="{{ 1 if weather else 0 }}"
+    data-has-error="{{ 1 if error else 0 }}"
+>
+    <div class="bg-orb orb-1"></div>
+    <div class="bg-orb orb-2"></div>
+    <div class="bg-mesh"></div>
+    <div class="bg-grid"></div>
+
+    <main class="app-shell">
+        <section class="search-panel panel">
+            <p class="eyebrow">Live Weather Command Center</p>
+            <h1>Local weather. Exact local time. Smart city dashboard.</h1>
+            <p class="subtitle">
+                This dashboard auto-loads your current location, then lets you explore weather trends,
+                air quality, map insights, and quick city actions in one place.
+            </p>
+
+            <form method="post" autocomplete="off" class="city-form" id="city-form">
+                <input type="hidden" name="mode" id="mode-input" value="{{ last_mode }}">
+                <input type="hidden" name="lat" id="lat-input" value="{{ last_lat }}">
+                <input type="hidden" name="lon" id="lon-input" value="{{ last_lon }}">
+
+                <label for="city-input">City</label>
+                <div class="input-wrap">
+                    <input
+                        type="text"
+                        id="city-input"
+                        name="city"
+                        placeholder="Start typing a city..."
+                        value="{{ city_query }}"
+                        required
+                    >
+                    <button type="submit">Check Weather</button>
+                </div>
+                <div id="autocomplete-list" class="autocomplete-items" role="listbox" aria-label="City suggestions"></div>
+
+                <div class="action-row">
+                    <button type="button" class="secondary-btn" id="use-location">Use My Location</button>
+                    <button type="button" class="secondary-btn alt" id="toggle-theme">Switch Theme</button>
+                </div>
+                <div class="quick-unit-note">Auto location, forecast, AQI, favorites, recents, and interactive map.</div>
+
+                <div class="quick-cities" aria-label="Popular cities">
+                    <button type="button" class="quick-city" data-quick-city="New York">New York</button>
+                    <button type="button" class="quick-city" data-quick-city="London">London</button>
+                    <button type="button" class="quick-city" data-quick-city="Tokyo">Tokyo</button>
+                    <button type="button" class="quick-city" data-quick-city="Kathmandu">Kathmandu</button>
+                    <button type="button" class="quick-city" data-quick-city="Dubai">Dubai</button>
+                    <button type="button" class="quick-city" data-quick-city="Sydney">Sydney</button>
+                </div>
+            </form>
+
+            {% if error %}
+                <div class="status-card error">{{ error }}</div>
+            {% endif %}
+
+            <div id="client-status" class="status-card info hidden" aria-live="polite"></div>
+
+            {% if tips %}
+                <section class="tips-card">
+                    <h3>Smart Tips</h3>
+                    <ul class="tips-list">
+                        {% for tip in tips %}
+                            <li>{{ tip }}</li>
+                        {% endfor %}
+                    </ul>
+                </section>
+            {% endif %}
+
+            <section class="saved-panels">
+                <article class="saved-card">
+                    <h3>Recent Searches</h3>
+                    <div class="saved-list" id="recent-searches"></div>
+                </article>
+                <article class="saved-card">
+                    <h3>Favorite Cities</h3>
+                    <div class="saved-list" id="favorite-cities"></div>
+                </article>
+            </section>
+        </section>
+
+        <section class="weather-panel panel {% if weather %}visible{% endif %}" data-weather-city="{{ weather.city if weather else '' }}">
+            {% if weather %}
+                <div class="weather-top">
+                    <p class="timestamp">Updated {{ weather.updated_at_local }}</p>
+                    <p class="timezone-pill">{{ weather.timezone_label }}</p>
+                </div>
+
+                <h2>
+                    {{ weather.city }}
+                    {% if weather.country %}
+                        <span>{{ weather.country }}</span>
+                    {% endif %}
+                </h2>
+                <p class="condition">{{ weather.condition }}</p>
+                <p class="summary-line">{{ weather.summary }}</p>
+
+                <article class="clock-card">
+                    <p class="clock-label">Exact Local Time</p>
+                    <p class="clock-time" id="local-live-time" data-offset="{{ weather.utc_offset_seconds }}">{{ weather.local_time }}</p>
+                    <p class="clock-date" id="local-live-date">{{ weather.local_date }}</p>
+                </article>
+
+                <div class="sun-cycle">
+                    <article class="sun-card">
+                        <p class="sun-label">Sunrise</p>
+                        <p class="sun-value">{{ weather.sunrise_local }}</p>
+                    </article>
+                    <article class="sun-card">
+                        <p class="sun-label">Sunset</p>
+                        <p class="sun-value">{{ weather.sunset_local }}</p>
+                    </article>
+                </div>
+
+                <div class="temp-row">
+                    <span class="weather-icon">{{ weather.icon }}</span>
+                    <div class="temperature">
+                        <p class="temperature-main temperature-value" data-celsius="{{ weather.temperature_c if weather.temperature_c is not none else '' }}">{{ weather.temperature }}</p>
+                        <p class="temperature-range">
+                            H <span class="temperature-value" data-celsius="{{ weather.temp_max_c if weather.temp_max_c is not none else '' }}">{{ weather.temp_max }}</span>
+                            | L <span class="temperature-value" data-celsius="{{ weather.temp_min_c if weather.temp_min_c is not none else '' }}">{{ weather.temp_min }}</span>
+                        </p>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <article class="metric-card">
+                        <p class="metric-label">Humidity</p>
+                        <p class="metric-value">{{ weather.humidity }}</p>
+                    </article>
+                    <article class="metric-card">
+                        <p class="metric-label">Wind Speed</p>
+                        <p class="metric-value">{{ weather.wind }}</p>
+                    </article>
+                    <article class="metric-card">
+                        <p class="metric-label">Feels Like</p>
+                        <p class="metric-value temperature-value" data-celsius="{{ weather.feels_like_c if weather.feels_like_c is not none else '' }}">
+                            {{ weather.feels_like }}
+                        </p>
+                    </article>
+                    <article class="metric-card">
+                        <p class="metric-label">Pressure</p>
+                        <p class="metric-value">{{ weather.pressure }}</p>
+                    </article>
+                    <article class="metric-card">
+                        <p class="metric-label">Cloud Cover</p>
+                        <p class="metric-value">{{ weather.cloud_cover }}</p>
+                    </article>
+                    <article class="metric-card full-width">
+                        <p class="metric-label">Visibility and Daylight</p>
+                        <p class="metric-value">{{ weather.visibility }} | Daylight {{ weather.daylight_hours }}</p>
+                    </article>
+                </div>
+
+                {% if air_quality %}
+                    <section class="aqi-card">
+                        <div class="aqi-main">
+                            <p class="aqi-title">Air Quality</p>
+                            <p class="aqi-level">{{ air_quality.label }}</p>
+                            <p class="aqi-score">AQI {{ air_quality.aqi }}</p>
+                        </div>
+                        <div class="pollutant-grid">
+                            <p><span>PM2.5</span> {{ air_quality.pm2_5 }}</p>
+                            <p><span>PM10</span> {{ air_quality.pm10 }}</p>
+                            <p><span>NO2</span> {{ air_quality.no2 }}</p>
+                            <p><span>O3</span> {{ air_quality.o3 }}</p>
+                            <p><span>CO</span> {{ air_quality.co }}</p>
+                        </div>
+                    </section>
+                {% endif %}
+
+                {% if forecast %}
+                    <section class="forecast-card">
+                        <div class="forecast-head">
+                            <h3>Next 24 Hours Forecast</h3>
+                            <p>3-hour intervals</p>
+                        </div>
+                        <div class="forecast-track">
+                            {% for item in forecast %}
+                                <article class="forecast-item">
+                                    <p class="forecast-day">{{ item.day }}</p>
+                                    <p class="forecast-time">{{ item.time }}</p>
+                                    <p class="forecast-icon">{{ item.icon }}</p>
+                                    <p class="forecast-temp temperature-value" data-celsius="{{ item.temp_c if item.temp_c is not none else '' }}">{{ item.temp }}</p>
+                                    <p class="forecast-condition">{{ item.condition }}</p>
+                                    <p class="forecast-rain">Rain {{ item.rain_chance }}</p>
+                                </article>
+                            {% endfor %}
+                        </div>
+                    </section>
+                {% endif %}
+
+                <section class="map-card">
+                    <div class="map-head">
+                        <h3>Interactive Map</h3>
+                        {% if weather.map_link %}
+                            <a href="{{ weather.map_link }}" target="_blank" rel="noopener noreferrer">Open full map</a>
+                        {% endif %}
+                    </div>
+                    <div
+                        id="weather-map"
+                        class="weather-map"
+                        data-lat="{{ weather.lat if weather.lat is not none else '' }}"
+                        data-lon="{{ weather.lon if weather.lon is not none else '' }}"
+                        data-city="{{ weather.city }}"
+                        data-condition="{{ weather.condition }}"
+                        data-temp="{{ weather.temperature }}"
+                    ></div>
+                </section>
+
+                <div class="action-row weather-actions">
+                    <div class="unit-toggle" role="group" aria-label="Temperature unit selector">
+                        <button type="button" class="unit-btn active" data-unit="c">°C</button>
+                        <button type="button" class="unit-btn" data-unit="f">°F</button>
+                    </div>
+                    <button type="button" class="ghost-btn" id="refresh-weather">Refresh</button>
+                    <button type="button" class="ghost-btn" id="save-favorite">Save Favorite</button>
+                    <button type="button" class="ghost-btn" id="copy-summary">Copy Summary</button>
+                </div>
+            {% else %}
+                <div class="empty-state">
+                    <p class="empty-kicker">Auto Loading</p>
+                    <h2>Getting weather for your current location.</h2>
+                    <p>
+                        If location access is allowed, this dashboard will automatically show your local weather,
+                        exact local time, air quality, and forecast without typing.
+                    </p>
+                    <div class="empty-map">You can still search manually at any time.</div>
+                </div>
+            {% endif %}
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const cities = [
+            "London", "New York", "Paris", "Tokyo", "Delhi", "Sydney", "Moscow", "Beijing",
+            "Berlin", "Dubai", "Kathmandu", "Toronto", "Singapore", "Bangkok", "Rome",
+            "Istanbul", "Barcelona", "Lisbon", "Seoul", "San Francisco"
+        ];
+
+        const cityForm = document.getElementById("city-form");
+        const modeInput = document.getElementById("mode-input");
+        const latInput = document.getElementById("lat-input");
+        const lonInput = document.getElementById("lon-input");
+        const clientStatus = document.getElementById("client-status");
+        const body = document.body;
+        const hasWeather = body.dataset.hasWeather === "1";
+        const hasError = body.dataset.hasError === "1";
+
+        const input = document.getElementById("city-input");
+        const list = document.getElementById("autocomplete-list");
+        const locationButton = document.getElementById("use-location");
+        const themeButton = document.getElementById("toggle-theme");
+
+        const RECENTS_KEY = "weather-recent-cities-v2";
+        const FAVORITES_KEY = "weather-favorite-cities-v2";
+        const AUTO_LOCATION_KEY = "weather-auto-location-tried-v2";
+
+        function setSearchMode(mode) {
+            const resolvedMode = mode === "coords" ? "coords" : "city";
+            modeInput.value = resolvedMode;
+            input.required = resolvedMode !== "coords";
+        }
+
+        setSearchMode(modeInput.value);
+
+        function showClientStatus(message, type = "info") {
+            if (!clientStatus) {
+                return;
+            }
+
+            clientStatus.textContent = message;
+            clientStatus.classList.remove("hidden", "error", "info", "success");
+            clientStatus.classList.add(type);
+        }
+
+        function readList(key) {
+            try {
+                const value = JSON.parse(localStorage.getItem(key) || "[]");
+                if (!Array.isArray(value)) {
+                    return [];
+                }
+                return value.filter((item) => typeof item === "string" && item.trim()).slice(0, 8);
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function writeList(key, items) {
+            localStorage.setItem(key, JSON.stringify(items.slice(0, 8)));
+        }
+
+        function renderSavedList(containerId, key, emptyMessage) {
+            const container = document.getElementById(containerId);
+            if (!container) {
+                return;
+            }
+
+            const items = readList(key);
+            if (items.length === 0) {
+                container.innerHTML = `<p class="saved-empty">${emptyMessage}</p>`;
+                return;
+            }
+
+            container.innerHTML = "";
+            items.forEach((city) => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = "saved-city";
+                button.dataset.city = city;
+                button.textContent = city;
+                container.appendChild(button);
+            });
+        }
+
+        function addRecentCity(city) {
+            const cleaned = city.trim();
+            if (!cleaned) {
+                return;
+            }
+            const list = readList(RECENTS_KEY).filter((item) => item.toLowerCase() !== cleaned.toLowerCase());
+            list.unshift(cleaned);
+            writeList(RECENTS_KEY, list);
+            renderSavedList("recent-searches", RECENTS_KEY, "Search a city to build history.");
+        }
+
+        function addFavoriteCity(city) {
+            const cleaned = city.trim();
+            if (!cleaned) {
+                return;
+            }
+            const list = readList(FAVORITES_KEY).filter((item) => item.toLowerCase() !== cleaned.toLowerCase());
+            list.unshift(cleaned);
+            writeList(FAVORITES_KEY, list);
+            renderSavedList("favorite-cities", FAVORITES_KEY, "Save cities for quick access.");
+        }
+
+        function clearSuggestions() {
+            list.innerHTML = "";
+        }
+
+        function showSuggestions(query) {
+            clearSuggestions();
+
+            const value = query.trim().toLowerCase();
+            if (!value) {
+                return;
+            }
+
+            const matches = cities
+                .filter((city) => city.toLowerCase().startsWith(value))
+                .slice(0, 6);
+
+            matches.forEach((city) => {
+                const item = document.createElement("button");
+                item.type = "button";
+                item.className = "suggestion-item";
+                item.textContent = city;
+                item.setAttribute("role", "option");
+
+                item.addEventListener("click", () => {
+                    input.value = city;
+                    setSearchMode("city");
+                    clearSuggestions();
+                    input.focus();
+                });
+
+                list.appendChild(item);
+            });
+        }
+
+        input.addEventListener("input", (event) => {
+            showSuggestions(event.target.value);
+        });
+
+        input.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                clearSuggestions();
+            }
+        });
+
+        document.addEventListener("click", (event) => {
+            if (!list.contains(event.target) && event.target !== input) {
+                clearSuggestions();
+            }
+        });
+
+        document.querySelectorAll(".quick-city").forEach((button) => {
+            button.addEventListener("click", () => {
+                input.value = button.dataset.quickCity;
+                setSearchMode("city");
+                cityForm.requestSubmit();
+            });
+        });
+
+        function requestCurrentLocation({ auto = false } = {}) {
+            if (!navigator.geolocation) {
+                showClientStatus("Geolocation is not supported by your browser.", "error");
+                return;
+            }
+
+            if (locationButton) {
+                locationButton.disabled = true;
+                locationButton.textContent = auto ? "Locating Automatically..." : "Locating...";
+            }
+
+            setSearchMode("coords");
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    latInput.value = position.coords.latitude.toFixed(6);
+                    lonInput.value = position.coords.longitude.toFixed(6);
+                    cityForm.requestSubmit();
+                },
+                (error) => {
+                    let message = "Unable to access your location right now.";
+
+                    if (error.code === 1) {
+                        message = "Location access denied. Allow permission or search by city.";
+                    }
+                    if (error.code === 2) {
+                        message = "Location unavailable. Try again in a moment.";
+                    }
+                    if (error.code === 3) {
+                        message = "Location request timed out. Please retry.";
+                    }
+
+                    showClientStatus(message, "error");
+                    setSearchMode("city");
+
+                    if (locationButton) {
+                        locationButton.disabled = false;
+                        locationButton.textContent = "Use My Location";
+                    }
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 9000,
+                    maximumAge: 0
+                }
+            );
+        }
+
+        if (locationButton) {
+            locationButton.addEventListener("click", () => {
+                requestCurrentLocation();
+            });
+        }
+
+        input.addEventListener("focus", () => {
+            setSearchMode("city");
+        });
+
+        const unitButtons = document.querySelectorAll(".unit-btn");
+        const temperatureNodes = document.querySelectorAll(".temperature-value");
+
+        function renderTemperature(unit) {
+            temperatureNodes.forEach((node) => {
+                const celsius = Number(node.dataset.celsius);
+                if (Number.isNaN(celsius)) {
+                    return;
+                }
+
+                if (unit === "f") {
+                    const fahrenheit = (celsius * 9) / 5 + 32;
+                    node.textContent = `${fahrenheit.toFixed(1)}°F`;
+                } else {
+                    node.textContent = `${celsius.toFixed(1)}°C`;
+                }
+            });
+
+            unitButtons.forEach((button) => {
+                button.classList.toggle("active", button.dataset.unit === unit);
+            });
+
+            localStorage.setItem("weather-unit", unit);
+        }
+
+        if (unitButtons.length > 0) {
+            const storedUnit = localStorage.getItem("weather-unit") || "c";
+            renderTemperature(storedUnit);
+            unitButtons.forEach((button) => {
+                button.addEventListener("click", () => {
+                    renderTemperature(button.dataset.unit);
+                });
+            });
+        }
+
+        const liveClock = document.getElementById("local-live-time");
+        const liveDate = document.getElementById("local-live-date");
+        if (liveClock) {
+            const offsetSeconds = Number(liveClock.dataset.offset || 0);
+
+            const updateLiveClock = () => {
+                const cityMs = Date.now() + offsetSeconds * 1000;
+                const cityDate = new Date(cityMs);
+
+                liveClock.textContent = cityDate.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    second: "2-digit",
+                    hour12: true,
+                    timeZone: "UTC"
+                });
+
+                if (liveDate) {
+                    liveDate.textContent = cityDate.toLocaleDateString([], {
+                        weekday: "long",
+                        month: "short",
+                        day: "2-digit",
+                        year: "numeric",
+                        timeZone: "UTC"
+                    });
+                }
+            };
+
+            updateLiveClock();
+            setInterval(updateLiveClock, 1000);
+        }
+
+        function initMap() {
+            const mapNode = document.getElementById("weather-map");
+            if (!mapNode || typeof L === "undefined") {
+                return;
+            }
+
+            const lat = Number(mapNode.dataset.lat);
+            const lon = Number(mapNode.dataset.lon);
+            if (Number.isNaN(lat) || Number.isNaN(lon)) {
+                mapNode.innerHTML = "<p class='map-fallback'>Map coordinates unavailable for this location.</p>";
+                return;
+            }
+
+            const map = L.map(mapNode, {
+                zoomControl: true,
+                scrollWheelZoom: true
+            }).setView([lat, lon], 10);
+
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution: "&copy; OpenStreetMap contributors",
+                maxZoom: 19
+            }).addTo(map);
+
+            const marker = L.marker([lat, lon]).addTo(map);
+            marker.bindPopup(`${mapNode.dataset.city} - ${mapNode.dataset.condition}<br>${mapNode.dataset.temp}`).openPopup();
+
+            setTimeout(() => map.invalidateSize(), 120);
+        }
+
+        initMap();
+
+        const weatherCity = document.querySelector(".weather-panel")?.dataset.weatherCity?.trim();
+        if (weatherCity) {
+            addRecentCity(weatherCity);
+        }
+
+        renderSavedList("recent-searches", RECENTS_KEY, "Search a city to build history.");
+        renderSavedList("favorite-cities", FAVORITES_KEY, "Save cities for quick access.");
+
+        document.addEventListener("click", (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) {
+                return;
+            }
+
+            if (target.classList.contains("saved-city")) {
+                const city = target.dataset.city;
+                if (city) {
+                    input.value = city;
+                    setSearchMode("city");
+                    cityForm.requestSubmit();
+                }
+            }
+        });
+
+        const saveFavoriteButton = document.getElementById("save-favorite");
+        if (saveFavoriteButton) {
+            saveFavoriteButton.addEventListener("click", () => {
+                const city = weatherCity || input.value.trim();
+                if (!city) {
+                    showClientStatus("Search a city first to save a favorite.", "info");
+                    return;
+                }
+                addFavoriteCity(city);
+                showClientStatus(`${city} added to favorites.`, "success");
+            });
+        }
+
+        const refreshButton = document.getElementById("refresh-weather");
+        if (refreshButton) {
+            refreshButton.addEventListener("click", () => {
+                const hasCoords = latInput.value && lonInput.value;
+                if (hasCoords && modeInput.value === "coords") {
+                    setSearchMode("coords");
+                    cityForm.requestSubmit();
+                    return;
+                }
+
+                const city = weatherCity || input.value.trim();
+                if (city) {
+                    input.value = city;
+                    setSearchMode("city");
+                    cityForm.requestSubmit();
+                }
+            });
+        }
+
+        const themeOrder = ["theme-default", "theme-day", "theme-night"];
+        function applyTheme(themeClass) {
+            themeOrder.forEach((theme) => body.classList.remove(theme));
+            body.classList.add(themeClass);
+            localStorage.setItem("weather-theme", themeClass);
+        }
+
+        const savedTheme = localStorage.getItem("weather-theme");
+        if (savedTheme && themeOrder.includes(savedTheme)) {
+            applyTheme(savedTheme);
+        }
+
+        if (themeButton) {
+            themeButton.addEventListener("click", () => {
+                const currentTheme = themeOrder.find((theme) => body.classList.contains(theme)) || "theme-default";
+                const nextIndex = (themeOrder.indexOf(currentTheme) + 1) % themeOrder.length;
+                applyTheme(themeOrder[nextIndex]);
+                showClientStatus(`Theme changed to ${themeOrder[nextIndex].replace("theme-", "")}.`, "success");
+            });
+        }
+
+        const copyButton = document.getElementById("copy-summary");
+        if (copyButton) {
+            copyButton.addEventListener("click", async () => {
+                const city = document.querySelector(".weather-panel h2")?.innerText.replace(/\s+/g, " ").trim();
+                const condition = document.querySelector(".condition")?.innerText.trim();
+                const temp = document.querySelector(".temp-row .temperature-value")?.innerText.trim();
+                const localTime = document.getElementById("local-live-time")?.innerText.trim();
+                const summary = `Weather: ${city} | ${condition} | ${temp} | Local time: ${localTime}`;
+
+                try {
+                    await navigator.clipboard.writeText(summary);
+                    copyButton.textContent = "Copied";
+                    setTimeout(() => {
+                        copyButton.textContent = "Copy Summary";
+                    }, 1300);
+                } catch (error) {
+                    showClientStatus("Unable to copy to clipboard. Try again.", "error");
+                }
+            });
+        }
+
+        if (!hasWeather && !hasError) {
+            const alreadyTried = sessionStorage.getItem(AUTO_LOCATION_KEY) === "1";
+            if (!alreadyTried) {
+                sessionStorage.setItem(AUTO_LOCATION_KEY, "1");
+                requestCurrentLocation({ auto: true });
+            }
+        }
+    </script>
 </body>
 </html>
+

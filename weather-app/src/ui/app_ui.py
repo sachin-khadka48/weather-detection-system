@@ -1,31 +1,18 @@
-from flask import Flask, render_template, request
-from utils.weather_api import WeatherAPI
+from pathlib import Path
+import os
+import sys
 
-app = Flask(__name__)
-api_key = 'ecd53c9e8423f9e8b0cded3d83852b72'
-weather_api = WeatherAPI(api_key)
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    weather = None
-    error = None
-    if request.method == 'POST':
-        city = request.form.get('city')
-        if city:
-            data = weather_api.fetch_weather(city)
-            if data and data.get('cod') == 200:
-                weather = {
-                    'city': data.get('name'),
-                    'temperature': data['main']['temp'],
-                    'humidity': data['main']['humidity'],
-                    'condition': data['weather'][0]['description'],
-                    'wind': data['wind']['speed']
-                }
-            else:
-                error = "Could not retrieve weather data. Please check the city name."
-        else:
-            error = "Please enter a city name."
-    return render_template('index.html', weather=weather, error=error)
+SRC_DIR = Path(__file__).resolve().parents[1]
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+
+from web_app import app, _read_port  # noqa: E402
+
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(
+        debug=os.getenv('FLASK_DEBUG', '1') == '1',
+        host=os.getenv('FLASK_HOST', '0.0.0.0'),
+        port=_read_port()
+    )
