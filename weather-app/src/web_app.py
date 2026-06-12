@@ -2,11 +2,11 @@ from datetime import datetime, timedelta, timezone
 import os
 
 from flask import Flask, jsonify, render_template, request
-from utils.weather_api import WeatherAPI
+from src.utils.weather_api import WeatherAPI
 
 app = Flask(__name__)
-default_api_key = 'ecd53c9e8423f9e8b0cded3d83852b72'
-api_key = os.getenv('OPENWEATHER_API_KEY', default_api_key).strip()
+
+api_key = os.getenv('OPENWEATHER_API_KEY')
 weather_api = WeatherAPI(api_key)
 
 
